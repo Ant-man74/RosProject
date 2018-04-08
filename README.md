@@ -8,7 +8,7 @@ Useful Command :
 	- catkin_make
 	- roscore
 	- rosrun package node
-	- rosrun map_server map_server maps/fablab.yaml
+	- rosrun map_server map_server fablab/fablab.yaml
 	- rosrun amcl amcl
   
 Dans rviz:
