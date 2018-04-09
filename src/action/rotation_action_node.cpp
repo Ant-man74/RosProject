@@ -57,7 +57,7 @@ rotation_action() {
 
     // communication with decision
     pub_rotation_done = n.advertise<std_msgs::Float32>("rotation_done", 1);
-    sub_rotation_to_do = n.subscribe("rotation_to_do", 1, &rotation_action::rotation_to_doCallback, this);//this is the rotation that has to be performed
+    sub_rotation_to_do = n.subscribe("rotation_to_do", 100, &rotation_action::rotation_to_doCallback, this);//this is the rotation that has to be performed
 
     error_integral = 0;
     error_previous = 0;
@@ -173,6 +173,7 @@ void odomCallback(const nav_msgs::Odometry::ConstPtr& o) {
 }
 
 void rotation_to_doCallback(const std_msgs::Float32::ConstPtr & a) {
+    ROS_INFO("(rotation_action_node) received a /rotation_to_do");
 
     new_rotation_to_do = true;
     rotation_to_do = a->data;

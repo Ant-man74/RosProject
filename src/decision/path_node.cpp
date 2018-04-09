@@ -49,6 +49,7 @@ class path {
         
         bool new_rotation_done;
         bool new_translation_done;
+        bool atObjective;
 
         public:
 
@@ -91,7 +92,8 @@ class path {
 			    pathList[6] = point7;
 
                 currentPoint = 0;
-               
+                atObjective = true;
+
                 // communication with rotation_action
                 pub_rotation_to_do = n.advertise<std_msgs::Float32>("rotation_to_do", 0);
                 sub_rotation_done = n.subscribe("rotation_done", 1, &path::rotation_doneCallback, this);
@@ -99,9 +101,9 @@ class path {
                 // communication with translation_action
                 pub_translation_to_do = n.advertise<std_msgs::Float32>("translation_to_do", 0);
                 sub_translation_done = n.subscribe("translation_done", 1, &path::translation_doneCallback, this);
-
-        		pub_switch_state_to_follow = n.advertise<std_msgs::Float32>("switch_state_follow", 0);
-				sub_switched_state_to_path = n.subscribe("switch_state_path", 1, &path::switch_stateCallback, this);
+						
+        		//pub_switch_state_to_follow = n.advertise<std_msgs::Float32>("switch_state_follow", 100);
+				//sub_switched_state_to_path = n.subscribe("switch_state_path", 1, &path::switch_stateCallback, this);
 
                 //loop to cycle through the path
                 ros::Rate r(10);// this node will run at 10hz
@@ -117,36 +119,41 @@ class path {
             //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
             void update() {
 
-                while( currentPoint < PATHLENGTH ){
-   	                ROS_INFO("(path_node update)");
+                if( atObjective == true ){     	
+	                   
+	                    atObjective = false;
+	                    currentPoint++;
 
-                    goal_to_reach = pathList[currentPoint+1];
+   	                	ROS_INFO("(path_node update)");
 
-
-                    // Translation = sqrt(x^2 + y^2)
-                    translation_to_do = sqrt( ( goal_to_reach.x * goal_to_reach.x ) + ( goal_to_reach.y * goal_to_reach.y ) );
-
-                    // Rotation = arccos(x/abcysse_length)
-                    rotation_to_do = acos( goal_to_reach.x / translation_to_do );
+                    	goal_to_reach = pathList[currentPoint+1];
 
 
-                    // Envoie l'info aux noeuds de rotation et de translation
+                    	// Translation = sqrt(x^2 + y^2)
+                   		translation_to_do = sqrt((goal_to_reach.x * goal_to_reach.x) + (goal_to_reach.y * goal_to_reach.y));
 
-                    ROS_INFO("(path_node) /rotation_to_do");
-                    std_msgs::Float32 msg_rotation_to_do;
-                    
-                    // publish rotate
-                    msg_rotation_to_do.data = rotation_to_do;
-                    pub_rotation_to_do.publish(msg_rotation_to_do);
+                    	// Rotation = arccos(x/abcysse_length)
+                    	rotation_to_do = acos(goal_to_reach.x / translation_to_do);
 
-                    ROS_INFO("(path_node) /translation_to_do");
-                    std_msgs::Float32 msg_translation_to_do;
-                    
-                    //publish translate
-                    msg_translation_to_do.data = translation_to_do;
-                    pub_translation_to_do.publish(msg_translation_to_do);
 
-                    currentPoint++;
+	                    // Envoie l'info aux noeuds de rotation et de translation
+
+	                    ROS_INFO("(path_node) /rotation_to_do %f ",rotation_to_do);
+	                    std_msgs::Float32 msg_rotation_to_do;
+	                    
+	                    // publish rotate
+	                    msg_rotation_to_do.data = rotation_to_do;
+	                    pub_rotation_to_do.publish(msg_rotation_to_do);
+
+	                    ROS_INFO("(path_node) /translation_to_do %f %f",goal_to_reach.x,goal_to_reach.y);
+	                    std_msgs::Float32 msg_translation_to_do;
+	                    
+	                    //publish translate
+	                    msg_translation_to_do.data = 1;
+	                    pub_translation_to_do.publish(msg_translation_to_do);
+	                     ROS_INFO("ok");
+
+	                
                 }
             }
 
@@ -158,14 +165,17 @@ class path {
                 // process the angle received from the rotation node
 
                 new_rotation_done = true;
+                atObjective = true;
                 rotation_done = a->data;
 
             }
 
             void translation_doneCallback(const std_msgs::Float32::ConstPtr& r) {
                 // process the range received from the translation node
+	                    ROS_INFO("(AAAAAAAAAAAAAAAAAAAAAAAAAAA");
 
                 new_translation_done= true;
+                atObjective = true;
                 translation_done = r->data;
 
             }
