@@ -43,6 +43,7 @@ class path {
 	    geometry_msgs::Point pathList[PATHLENGTH]; // Array with the path
 	   
 	    int currentPoint;
+	    int follow_me_not;
 
         geometry_msgs::Point goal_to_reach;
         geometry_msgs::Point goal_reached;
@@ -92,6 +93,7 @@ class path {
 			    pathList[6] = point7;
 
                 currentPoint = 0;
+                follow_me_not = 1;
                 atObjective = true;
 
                 // communication with rotation_action
@@ -107,7 +109,7 @@ class path {
 
                 //loop to cycle through the path
                 ros::Rate r(10);// this node will run at 10hz
-                while (currentPoint < PATHLENGTH-1) {
+                while (ros::ok()) {
                     ros::spinOnce();//each callback is called once to collect new data
                     update();//processing of data
                     r.sleep();//we wait if the processing (ie, callback+update) has taken less than 0.1s (ie, 10 hz)
@@ -119,7 +121,7 @@ class path {
             //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
             void update() {
 
-                if( atObjective == true ){     	
+                if( atObjective == true  && follow_me_not == 1){     	
 	                   
 	                    atObjective = false;
 	                    currentPoint++;
@@ -151,7 +153,10 @@ class path {
 	                    //publish translate
 	                    msg_translation_to_do.data = 1;
 	                    pub_translation_to_do.publish(msg_translation_to_do);
-	                     ROS_INFO("ok");
+
+	                    if(currentPoint == 6){
+	                    	currentPoint = 0;
+	                    }
 
 	                
                 }
@@ -172,8 +177,6 @@ class path {
 
             void translation_doneCallback(const std_msgs::Float32::ConstPtr& r) {
                 // process the range received from the translation node
-	                    ROS_INFO("(AAAAAAAAAAAAAAAAAAAAAAAAAAA");
-
                 new_translation_done= true;
                 atObjective = true;
                 translation_done = r->data;
