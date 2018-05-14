@@ -1,6 +1,6 @@
-## RosProject
+# RosProject
 
-#Useful Command :
+## Useful Command :
 
 	- source devel/setup.bash
 	- export ROS_MASTER_URI = http://192.168.1.34:11311
@@ -11,14 +11,14 @@
 	- rosrun map_server map_server fablab/fablab.yaml
 	- rosrun amcl amcl
   
-#Dans rviz:
+## Dans rviz:
 	
 	- Ajouter LaserScan, topic /scan
 	- Ajouter Map, topic /map
 	- Ajouter PoseWithCovariance, topic /amcl_pose
 	- Ajouter PoseArray, /particlecloud
 
-#Nodes:
+## Nodes:
 
 	- decision: decision_node
 	- decision: path_node
@@ -28,7 +28,7 @@
 	- action: rotation_action_node
 	- action: translation_action_node
 
-#To Launch the program
+## Pour lancer
 
 Launch the nodes:
 
