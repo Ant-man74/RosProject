@@ -1,6 +1,8 @@
 #include "ros/ros.h"
 #include <geometry_msgs/Twist.h>
 #include "geometry_msgs/Point.h"
+#include <tf/transform_listener.h>
+#include <tf/transform_broadcaster.h>
 #include "geometry_msgs/Quaternion.h"
 #include "std_msgs/ColorRGBA.h"
 #include "std_msgs/Float32.h"
@@ -8,8 +10,6 @@
 #include "nav_msgs/Odometry.h"
 #include <tf/transform_datatypes.h>
 #include <string>
-
-#define PATHLENGTH 7
 
 class path {
 
@@ -28,6 +28,12 @@ class path {
         ros::Publisher pub_switch_state_to_follow;
         ros::Subscriber sub_switched_state_to_path;
 		
+		//to retrieve current pose
+        tf::TransformListener listener;
+        tf::Transform transform;
+        tf::StampedTransform stampedTransform;
+        tf::TransformBroadcaster br;
+
 		float allRotation;//keep track of all previous rotation to keep the orientation rigth	
 		
 	    float rotation_to_do;
@@ -57,7 +63,7 @@ class path {
         bool new_translation_done;//boolean to check if a translation is done
 
         bool firstTime;//boolean to check if it's the first turn
-
+        bool adjusting;
         bool cond_rotation;//boolean to check if a rotation is going
         bool cond_translation;//boolean to check if a translation is going
 
@@ -65,7 +71,7 @@ class path {
 
             path() {		    
 
-            	//robot need to start at point 0 and at an angle in accordance to the graph 
+            	//robot need to start at point 0 and at an angle of around 150 degree (along y positive axis) because the graph is kind of s*** 
 				point0.x = -11;
             	point0.y = 1;
 
@@ -87,16 +93,14 @@ class path {
             	point6.x = -10;
             	point6.y = 4;
 
-
 			    pathList[0] = point1;
 			    pathList[1] = point2;
 			    pathList[2] = point3;
 			    pathList[3] = point4;
 			    pathList[4] = point5;
 			    pathList[5] = point6;
-				
 				currentPose = point0;
-				allRotation = 0;
+
 				//orientation :
             	/*
             	NORTH = 0
@@ -104,9 +108,16 @@ class path {
 				SOUTh = 2				
 				WEST = 3 
 				I hate c++ enum would have been better but couldn't manage to do it
-            	*/
+            	*/				
+				allRotation = 0;
 				orientation = 0;
                 currentPoint = 0;
+
+                //trying to set up to retreive the coordiante no idea if it worjk
+                transform.setOrigin(tf::Vector3(5,0.0,0.0));
+                transform.setRotation(tf::Quaternion(0,0,0,1));
+				stampedTransform = tf::StampedTransform(transform,ros::Time::now(),"/odom","/dummyFrame");
+                br.sendTransform(stampedTransform);
 
                 // communication with rotation_action
                 pub_rotation_to_do = n.advertise<std_msgs::Float32>("rotation_to_do", 0);
@@ -142,34 +153,39 @@ class path {
             //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
             void update() {
  				
-                if( !cond_translation  && !cond_rotation ){     	
+ 				ROS_INFO("(path_node update)");
+               
+                if( !cond_translation  && !cond_rotation && !adjusting){     	
 	                   
-                    goal_to_reach = pathList[currentPoint];
-                    ROS_INFO("(path_node update)");
+                    goal_to_reach = pathList[currentPoint];                    
 
                     //because we don't start at 0,0 we have to calculate the relative distance between two point
-	                float relativeX = currentPose.x - goal_to_reach.x; 
-	                float relativeY = currentPose.y - goal_to_reach.y;
+	                float relativeX = currentPose.x - goal_to_reach.x; //-2.5
+	                float relativeY = currentPose.y - goal_to_reach.y;//-6
 
 	                //calculate translation
                 	translation_to_do = sqrt((relativeX * relativeX) + (relativeY * relativeY));
 
+                	ROS_INFO("(path_node (trans to do: %f)(currentRelative : %f, %f) )",translation_to_do, relativeX, relativeY);
+
                 	//calculate rotation depending on orientation cf schema.png
                 	switch(orientation){
+
                 		case 0://orientation south
-                			rotation_to_do = acos(relativeY/translation_to_do);
+                			rotation_to_do = acos(relativeY/translation_to_do);ROS_INFO("a");
                 			break;
                 		case 1://orientation north
-                			rotation_to_do = acos(relativeY/translation_to_do);						
+                			rotation_to_do = acos(relativeY/translation_to_do);	ROS_INFO("b");				
                 			break;
 						case 2://orientation EASR
-							rotation_to_do = acos(relativeX/translation_to_do);
+							rotation_to_do = acos(relativeX/translation_to_do);ROS_INFO("c");
                 			break;
 						case 3://orientation WEST
-							rotation_to_do = acos(relativeX/translation_to_do);							
+							rotation_to_do = acos(relativeX/translation_to_do);	ROS_INFO("d");						
                 			break;
                 	}
 
+					ROS_INFO("(path_node rotation to do) %f",rotation_to_do);
                 	
 					//avoid the first rotation because it's throwing things off I think
                 	if(!firstTime){
@@ -238,24 +254,45 @@ class path {
 					//if both the translation and rotation have been done
                     if(new_translation_done && new_rotation_done){
 
-                    	//switch pointer to next point in patrol
-                    	currentPoint++;
-                    	//declare that robot is at coordiante
-                    	currentPose = goal_to_reach;
-
-                    	ROS_INFO("(path_node) at aimed point %d ",currentPoint);
-                    	//ToDo Add check for coordinate between AMCL and the robot currentPose if they don't match need to correct
-                    	
+                    	ROS_INFO("(path_node) at aimed point %d ",currentPoint);                    	
+                    	//both translation done
                     	new_rotation_done = false;
                     	new_translation_done = false;
+                    	
+                    	adjusting = true;
 
-                    	//If we are done with the last point put the counter back to 0 because we should be at origin
-	                    if(currentPoint == 6){
-	                    	currentPoint = 0;
-	                    }
                     }
 
-             	}
+                    if(adjusting){
+
+                    	adjusting = false;
+
+                    	try{
+			              	listener.waitForTransform("/base_link", "/dummyFrame", ros::Time(0), ros::Duration(3.0));
+			              	listener.lookupTransform("/base_link", "/dummyFrame", ros::Time(0), stampedTransform);
+			            }catch (tf::TransformException &ex) {
+			              ROS_ERROR("%s",ex.what());
+			              ros::Duration(1.0).sleep();
+			            }
+
+			           	ROS_INFO("current pose: %f", stampedTransform.getOrigin().y());
+			           	
+			           	currentPose.x = stampedTransform.getOrigin().x();
+			           	currentPose.y = stampedTransform.getOrigin().y();
+			           	
+			           	//si le robot est a + ou moins 0.5 du goal on dit ok sinon pas bon
+			           	if(!(currentPose.x-goal_to_reach.x < -0.5 || currentPose.x-goal_to_reach.x > 0.5 &&
+			           		currentPose.y-goal_to_reach.y < -0.5 || currentPose.y-goal_to_reach.y > 0.5 )){
+			           		//switch pointer to next point in patrol
+                    		currentPoint++;		
+
+                    		//If we are done with the last point put the counter back to 0 because we should be at origin
+		                    if(currentPoint == 6){
+		                    	currentPoint = 0;
+		                    }
+			           	}                   	
+                    }
+                }
             }
 
             //CALLBACKS
@@ -283,11 +320,6 @@ class path {
             float distancePoints(geometry_msgs::Point pa, geometry_msgs::Point pb) {
                 return sqrt(pow((pa.x-pb.x),2.0) + pow((pa.y-pb.y),2.0));
             }
-
-            void switch_stateCallback(const std_msgs::Float32::ConstPtr& r) {
-    		// process the change of state
-
-    		}
 
 };
 
